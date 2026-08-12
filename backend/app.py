@@ -1,0 +1,245 @@
+
+import streamlit as st
+import pandas as pd
+import joblib
+import numpy as np
+from pathlib import Path
+
+
+# ---------------------------------------------------------
+# Load the trained model
+# ---------------------------------------------------------
+
+@st.cache_resource
+def load_model():
+
+    model_path = (
+        Path(__file__).resolve().parent
+        / "SuperKart_prediction_model_v1_0.joblib"
+    )
+
+    return joblib.load(model_path)
+
+
+model = load_model()
+
+
+# ---------------------------------------------------------
+# Streamlit App
+# ---------------------------------------------------------
+
+st.title("SuperKart Sales Prediction App")
+
+st.write(
+    """
+    This tool predicts the expected sales revenue of a product
+    in a SuperKart store based on product and store characteristics.
+    """
+)
+
+
+# ---------------------------------------------------------
+# User Input
+# ---------------------------------------------------------
+
+st.subheader("Enter the product and store details:")
+
+
+# Product information
+
+product_weight = st.number_input(
+    "Product Weight",
+    min_value=4.0,
+    max_value=22.0,
+    value=12.65,
+    step=0.01
+)
+
+
+product_sugar_content = st.selectbox(
+    "Product Sugar Content",
+    [
+        "Low Sugar",
+        "Regular",
+        "No Sugar"
+    ]
+)
+
+
+product_allocated_area = st.number_input(
+    "Product Allocated Area",
+    min_value=0.004,
+    max_value=0.298,
+    value=0.068,
+    step=0.001
+)
+
+
+product_type = st.selectbox(
+    "Product Type",
+    [
+        "Baking Goods",
+        "Breads",
+        "Breakfast",
+        "Canned",
+        "Dairy",
+        "Frozen Foods",
+        "Fruits and Vegetables",
+        "Hard Drinks",
+        "Health and Hygiene",
+        "Household",
+        "Meat",
+        "Others",
+        "Seafood",
+        "Snack Foods",
+        "Soft Drinks",
+        "Starchy Foods"
+    ]
+)
+
+
+product_mrp = st.number_input(
+    "Product MRP",
+    min_value=31.0,
+    max_value=266.0,
+    value=147.0,
+    step=0.01
+)
+
+
+# Store information
+
+store_id = st.selectbox(
+    "Store ID",
+    [
+        "OUT001",
+        "OUT002",
+        "OUT003",
+        "OUT004"
+    ]
+)
+
+
+store_establishment_year = st.selectbox(
+    "Store Establishment Year",
+    [
+        1987,
+        1998,
+        2009
+    ]
+)
+
+
+store_size = st.selectbox(
+    "Store Size",
+    [
+        "Small",
+        "Medium",
+        "High"
+    ]
+)
+
+
+store_location_city_type = st.selectbox(
+    "Store Location City Type",
+    [
+        "Tier 1",
+        "Tier 2",
+        "Tier 3"
+    ]
+)
+
+
+store_type = st.selectbox(
+    "Store Type",
+    [
+        "Departmental Store",
+        "Food Mart",
+        "Supermarket Type1",
+        "Supermarket Type2"
+    ]
+)
+
+
+# ---------------------------------------------------------
+# Prediction
+# ---------------------------------------------------------
+
+if st.button("Predict Sales"):
+
+    # Convert establishment year to store age
+    reference_year = 2025
+
+    store_age = (
+        reference_year - store_establishment_year
+    )
+
+
+    # Create raw input DataFrame
+    input_data = pd.DataFrame([{
+        "Product_Weight": product_weight,
+        "Product_Sugar_Content": product_sugar_content,
+        "Product_Allocated_Area": product_allocated_area,
+        "Product_Type": product_type,
+        "Product_MRP": product_mrp,
+        "Store_Id": store_id,
+        "Store_Age": store_age,
+        "Store_Size": store_size,
+        "Store_Location_City_Type": store_location_city_type,
+        "Store_Type": store_type
+    }])
+
+
+    # -----------------------------------------------------
+    # Apply the same categorical preprocessing
+    # used during model training
+    # -----------------------------------------------------
+
+    categorical_features = [
+        "Product_Sugar_Content",
+        "Product_Type",
+        "Store_Size",
+        "Store_Location_City_Type",
+        "Store_Type",
+        "Store_Id"
+    ]
+
+
+    input_data = pd.get_dummies(
+        input_data,
+        columns=categorical_features,
+        drop_first=True
+    )
+
+
+    # -----------------------------------------------------
+    # Align input columns with model training columns
+    # -----------------------------------------------------
+
+    model_features = model.feature_names_in_
+
+    input_data = input_data.reindex(
+        columns=model_features,
+        fill_value=0
+    )
+
+
+    # -----------------------------------------------------
+    # Generate prediction
+    # -----------------------------------------------------
+
+    prediction = model.predict(input_data)[0]
+
+
+    # -----------------------------------------------------
+    # Display prediction
+    # -----------------------------------------------------
+
+    st.success(
+        f"Predicted Product Store Sales: ${prediction:,.2f}"
+    )
+
+    st.info(
+        "The prediction represents the expected revenue "
+        "generated by this product in the selected store."
+    )
