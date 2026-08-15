@@ -13,5 +13,5 @@ RUN pip install --no-cache-dir --upgrade -r requirements.txt
 # Expose the backend API port
 EXPOSE 7860
 
-# Start the Flask API using Gunicorn
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:7860", "app:app"]
+# Start the Streamlit API using Gunicorn
+CMD ["streamlit", "run", "app.py", "--server.port", "7860", "--server.address", "0.0.0.0", "--server.headless", "true"]
