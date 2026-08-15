@@ -8,7 +8,7 @@ import requests
 # Backend API URL
 # ---------------------------------------------------------
 
-BACKEND_URL = "http://backend:7860"
+BACKEND_URL = "http://localhost:7860"
 
 
 # ---------------------------------------------------------
