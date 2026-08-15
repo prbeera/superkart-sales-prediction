@@ -1,245 +1,161 @@
 
-import streamlit as st
+from flask import Flask, request, jsonify
 import pandas as pd
-import joblib
 import numpy as np
+import joblib
 from pathlib import Path
 
+app = Flask(__name__)
 
-# ---------------------------------------------------------
-# Load the trained model
-# ---------------------------------------------------------
+MODEL_PATH = (
+    Path(__file__).resolve().parent
+    / "SuperKart_prediction_model_v1_0.joblib"
+)
 
-@st.cache_resource
-def load_model():
+model = joblib.load(MODEL_PATH)
 
-    model_path = (
-        Path(__file__).resolve().parent
-        / "SuperKart_prediction_model_v1_0.joblib"
+
+categorical_features = [
+    "Product_Sugar_Content",
+    "Product_Type",
+    "Store_Size",
+    "Store_Location_City_Type",
+    "Store_Type",
+    "Store_Id"
+]
+
+
+def preprocess_input(input_df):
+
+    input_df["Product_Sugar_Content"] = (
+        input_df["Product_Sugar_Content"]
+        .replace({"reg": "Regular"})
     )
 
-    return joblib.load(model_path)
-
-
-model = load_model()
-
-
-# ---------------------------------------------------------
-# Streamlit App
-# ---------------------------------------------------------
-
-st.title("SuperKart Sales Prediction App")
-
-st.write(
-    """
-    This tool predicts the expected sales revenue of a product
-    in a SuperKart store based on product and store characteristics.
-    """
-)
-
-
-# ---------------------------------------------------------
-# User Input
-# ---------------------------------------------------------
-
-st.subheader("Enter the product and store details:")
-
-
-# Product information
-
-product_weight = st.number_input(
-    "Product Weight",
-    min_value=4.0,
-    max_value=22.0,
-    value=12.65,
-    step=0.01
-)
-
-
-product_sugar_content = st.selectbox(
-    "Product Sugar Content",
-    [
-        "Low Sugar",
-        "Regular",
-        "No Sugar"
-    ]
-)
-
-
-product_allocated_area = st.number_input(
-    "Product Allocated Area",
-    min_value=0.004,
-    max_value=0.298,
-    value=0.068,
-    step=0.001
-)
-
-
-product_type = st.selectbox(
-    "Product Type",
-    [
-        "Baking Goods",
-        "Breads",
-        "Breakfast",
-        "Canned",
-        "Dairy",
-        "Frozen Foods",
-        "Fruits and Vegetables",
-        "Hard Drinks",
-        "Health and Hygiene",
-        "Household",
-        "Meat",
-        "Others",
-        "Seafood",
-        "Snack Foods",
-        "Soft Drinks",
-        "Starchy Foods"
-    ]
-)
-
-
-product_mrp = st.number_input(
-    "Product MRP",
-    min_value=31.0,
-    max_value=266.0,
-    value=147.0,
-    step=0.01
-)
-
-
-# Store information
-
-store_id = st.selectbox(
-    "Store ID",
-    [
-        "OUT001",
-        "OUT002",
-        "OUT003",
-        "OUT004"
-    ]
-)
-
-
-store_establishment_year = st.selectbox(
-    "Store Establishment Year",
-    [
-        1987,
-        1998,
-        2009
-    ]
-)
-
-
-store_size = st.selectbox(
-    "Store Size",
-    [
-        "Small",
-        "Medium",
-        "High"
-    ]
-)
-
-
-store_location_city_type = st.selectbox(
-    "Store Location City Type",
-    [
-        "Tier 1",
-        "Tier 2",
-        "Tier 3"
-    ]
-)
-
-
-store_type = st.selectbox(
-    "Store Type",
-    [
-        "Departmental Store",
-        "Food Mart",
-        "Supermarket Type1",
-        "Supermarket Type2"
-    ]
-)
-
-
-# ---------------------------------------------------------
-# Prediction
-# ---------------------------------------------------------
-
-if st.button("Predict Sales"):
-
-    # Convert establishment year to store age
     reference_year = 2025
 
-    store_age = (
-        reference_year - store_establishment_year
+    input_df["Store_Age"] = (
+        reference_year -
+        input_df["Store_Establishment_Year"]
     )
 
+    input_df.drop(
+        columns=["Store_Establishment_Year"],
+        inplace=True
+    )
 
-    # Create raw input DataFrame
-    input_data = pd.DataFrame([{
-        "Product_Weight": product_weight,
-        "Product_Sugar_Content": product_sugar_content,
-        "Product_Allocated_Area": product_allocated_area,
-        "Product_Type": product_type,
-        "Product_MRP": product_mrp,
-        "Store_Id": store_id,
-        "Store_Age": store_age,
-        "Store_Size": store_size,
-        "Store_Location_City_Type": store_location_city_type,
-        "Store_Type": store_type
-    }])
-
-
-    # -----------------------------------------------------
-    # Apply the same categorical preprocessing
-    # used during model training
-    # -----------------------------------------------------
-
-    categorical_features = [
-        "Product_Sugar_Content",
-        "Product_Type",
-        "Store_Size",
-        "Store_Location_City_Type",
-        "Store_Type",
-        "Store_Id"
-    ]
-
-
-    input_data = pd.get_dummies(
-        input_data,
+    input_df = pd.get_dummies(
+        input_df,
         columns=categorical_features,
         drop_first=True
     )
 
-
-    # -----------------------------------------------------
-    # Align input columns with model training columns
-    # -----------------------------------------------------
+    if "Product_Id" in input_df.columns:
+        input_df.drop(
+            columns=["Product_Id"],
+            inplace=True
+        )
 
     model_features = model.feature_names_in_
 
-    input_data = input_data.reindex(
+    input_df = input_df.reindex(
         columns=model_features,
         fill_value=0
     )
 
-
-    # -----------------------------------------------------
-    # Generate prediction
-    # -----------------------------------------------------
-
-    prediction = model.predict(input_data)[0]
+    return input_df
 
 
-    # -----------------------------------------------------
-    # Display prediction
-    # -----------------------------------------------------
+@app.route("/", methods=["GET"])
+def home():
 
-    st.success(
-        f"Predicted Product Store Sales: ${prediction:,.2f}"
-    )
+    return jsonify({
+        "message": "SuperKart Sales Prediction API is running",
+        "status": "healthy"
+    })
 
-    st.info(
-        "The prediction represents the expected revenue "
-        "generated by this product in the selected store."
+
+@app.route("/v1/sales", methods=["POST"])
+def predict_sales():
+
+    try:
+
+        data = request.get_json()
+
+        if data is None:
+            return jsonify({
+                "error": "Request body must contain JSON data."
+            }), 400
+
+        input_df = pd.DataFrame([data])
+
+        processed_input = preprocess_input(
+            input_df
+        )
+
+        prediction = model.predict(
+            processed_input
+        )[0]
+
+        return jsonify({
+            "Predicted Sales": round(
+                float(prediction), 2
+            )
+        })
+
+    except Exception as e:
+
+        return jsonify({
+            "error": str(e)
+        }), 500
+
+
+@app.route("/v1/salesbatch", methods=["POST"])
+def predict_sales_batch():
+
+    try:
+
+        if "file" not in request.files:
+
+            return jsonify({
+                "error": "CSV file is required."
+            }), 400
+
+        file = request.files["file"]
+
+        input_df = pd.read_csv(file)
+
+        output_df = input_df.copy()
+
+        processed_input = preprocess_input(
+            input_df.copy()
+        )
+
+        predictions = model.predict(
+            processed_input
+        )
+
+        output_df["Predicted Sales"] = np.round(
+            predictions,
+            2
+        )
+
+        return jsonify(
+            output_df.to_dict(
+                orient="records"
+            )
+        )
+
+    except Exception as e:
+
+        return jsonify({
+            "error": str(e)
+        }), 500
+
+
+if __name__ == "__main__":
+
+    app.run(
+        host="0.0.0.0",
+        port=7860
     )
