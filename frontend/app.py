@@ -1,4 +1,5 @@
 
+import os
 import streamlit as st
 import pandas as pd
 import requests
@@ -8,7 +9,7 @@ import requests
 # Backend API URL
 # ---------------------------------------------------------
 
-BACKEND_URL = "http://localhost:7860"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:7860")
 
 
 # ---------------------------------------------------------

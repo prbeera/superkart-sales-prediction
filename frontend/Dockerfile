@@ -8,6 +8,9 @@ WORKDIR /app
 # Copy all frontend files into the container
 COPY . .
 
+# Default backend URL (can be overridden at runtime)
+ENV BACKEND_URL=http://backend:7860
+
 # Install Python dependencies listed in requirements.txt
 RUN pip3 install --no-cache-dir -r requirements.txt
 
